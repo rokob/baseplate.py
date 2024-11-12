@@ -58,6 +58,16 @@ PROM_ACTIVE = Gauge(
     ["thrift_method"],
     multiprocess_mode="livesum",
 )
+W3C_HEADERS: frozenset[bytes] = frozenset(
+    (
+        b"traceparent",
+        b"tracestate",
+        b"trace",
+        b"span",
+        b"sampled",
+        b"flags",
+    )
+)
 
 
 class _ContextAwareHandler:
@@ -82,9 +92,11 @@ class _ContextAwareHandler:
             header_dict = {}
             for k, v in headers.items():
                 try:
-                    header_dict[k.decode()] = v.decode()
+                    # this is only for w3c trace headers
+                    if k.lower() in W3C_HEADERS:
+                        header_dict[k.decode()] = v.decode()
                 except UnicodeDecodeError:
-                    self.logger.info(f"Unable to decode header {k.decode()}, ignoring.")
+                    self.logger.debug(f"Unable to decode header {k!r}={v!r}, ignoring.")
 
             ctx = propagator.extract(header_dict)
             logger.debug("Extracted trace headers. [ctx=%s, header_dict=%s]", ctx, header_dict)
