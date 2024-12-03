@@ -153,6 +153,7 @@ class VaultClientFactory:
         session = requests.Session()
         session.headers["User-Agent"] = (
             f"baseplate.py-{self.__class__.__name__}/{baseplate_version}"
+        )
         return session
 
     def _make_client(self) -> "VaultClient":
