@@ -147,17 +147,20 @@ class VaultClientFactory:
         self.role = role
         self.auth_type = auth_type
         self.mount_point = mount_point
-        self.session = requests.Session()
-        self.session.headers["User-Agent"] = (
-            f"baseplate.py-{self.__class__.__name__}/{baseplate_version}"
-        )
         self.client: Optional[VaultClient] = None
+
+    def _make_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers["User-Agent"] = (
+            f"baseplate.py-{self.__class__.__name__}/{baseplate_version}"
+        return session
 
     def _make_client(self) -> "VaultClient":
         """Obtain a client token from an auth backend and return a Vault client with it."""
         client_token, lease_duration = self.auth_type(self)
+        session = self._make_session()
 
-        return VaultClient(self.session, self.base_url, client_token, lease_duration)
+        return VaultClient(session, self.base_url, client_token, lease_duration)
 
     def _vault_kubernetes_auth(self) -> tuple[str, datetime.datetime]:
         r"""Get a client token from Vault through the Kubernetes auth backend.
@@ -258,8 +261,13 @@ class VaultClientFactory:
 
     def get_client(self) -> "VaultClient":
         """Get an authenticated client, reauthenticating if not cached."""
-        if not self.client or self.client.is_about_to_expire:
+        if self.client and self.client.is_about_to_expire:
+            self.client.close()
+            self.client = None
+
+        if not self.client:
             self.client = self._make_client()
+
         return self.client
 
 
@@ -282,6 +290,9 @@ class VaultClient:
         self.base_url = base_url
         self.token = token
         self.token_expiration = token_expiration
+
+    def close(self):
+        self.session.close()
 
     @property
     def is_about_to_expire(self) -> bool:
